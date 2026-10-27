@@ -1,7 +1,6 @@
-# Versions this was tested with (Raspberry Pi Zero 2 W, Raspberry Pi OS Lite bookworm, Python 3.11).
+# Step 1 of the install (see README). Tested on a Raspberry Pi Zero 2 W,
+# Raspberry Pi OS Lite 64-bit (bookworm), Python 3.11.
 PySwitchbot==3.1.0
-pyatv==0.18.0
-srptools==1.0.1      # pyatv pairing breaks with srptools 2.x
 aiohttp==3.14.5
 bleak==3.0.2
 pillow==13.0.0
