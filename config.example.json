@@ -1,0 +1,19 @@
+{
+  "mac": "AA:BB:CC:DD:EE:FF",
+  "device_id": "",
+  "key_id": "",
+  "encryption_key": "",
+  "token": "",
+  "secret": "",
+  "sb_email": "",
+  "sb_password": "",
+  "atv_id": "",
+  "tmdb_key": "",
+  "tmdb_language": "en-US",
+  "rotate": 90,
+  "portrait_w": 480,
+  "portrait_h": 800,
+  "delay": 10,
+  "reconnect_every": 60,
+  "http_port": 8765
+}

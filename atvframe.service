@@ -1,0 +1,15 @@
+[Unit]
+Description=Apple TV poster on SwitchBot AI Art Frame (atvframe)
+After=network-online.target bluetooth.target
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/atvframe
+ExecStart=/home/pi/atvframe/venv/bin/python -u /home/pi/atvframe/atvframe.py
+Restart=always
+RestartSec=30
+Nice=5
+
+[Install]
+WantedBy=multi-user.target
