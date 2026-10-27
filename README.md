@@ -106,7 +106,7 @@ enable SSH and Wi-Fi in the Imager settings, boot it and log in over SSH. Then:
 
 ```bash
 sudo apt update && sudo apt install -y git python3-venv bluetooth bluez
-git clone https://github.com/BlueCashew/appletv-switchbot-artframe.git ~/atvframe
+git clone https://github.com/OmegaProj3ct/appletv-switchbot-artframe.git ~/atvframe
 cd ~/atvframe
 python3 -m venv venv
 ```
