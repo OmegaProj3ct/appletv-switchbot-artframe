@@ -268,7 +268,7 @@ class FrameController:
     async def close(self):
         await self.cloud.close()
 
-    async def push_image(self, img, show=True, timeout=180):
+    async def push_image(self, img, show=True, timeout=360):
         """Put a PIL image on the frame. Returns its album index."""
         jpeg = to_jpeg(make_portrait(img, self.cfg))
         before = await self.cloud.album()
