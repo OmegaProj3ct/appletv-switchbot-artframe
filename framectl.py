@@ -106,6 +106,20 @@ def openapi_upload(cfg, jpeg_bytes):
 # ---------------- internal app API (album list / delete) ----------------
 # Not documented by SwitchBot. Found in the SwitchBot Android app; may change without notice.
 
+def _find_key(obj, key):
+    """Return the first truthy value of `key` in nested dicts/lists."""
+    if isinstance(obj, dict):
+        if obj.get(key):
+            return obj[key]
+        obj = list(obj.values())
+    if isinstance(obj, list):
+        for v in obj:
+            r = _find_key(v, key)
+            if r:
+                return r
+    return None
+
+
 class Cloud:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -158,9 +172,25 @@ class Cloud:
         imgs = (d.get("data") or {}).get("images") or []
         return {int(i["imageIndex"]): i for i in imgs}
 
+    async def group_id(self):
+        """The account's group ("home") ID. Required by images/delete: with an empty
+        groupID the cloud answers "delete image failed" and the poster stays in the album."""
+        if not self.cfg.get("group_id"):
+            d = await self._post("/homepage/v1/group/getall", {})
+            gid = _find_key(d, "groupID")
+            if not gid:
+                raise RuntimeError(f"no groupID found in group list: {str(d)[:200]}")
+            self.cfg["group_id"] = gid
+            save_config(self.cfg)
+        return self.cfg["group_id"]
+
     async def delete(self, indexes):
-        return await self._post("/device/artframe/api/v1/images/delete",
-                                {"deviceID": self.cfg["device_id"], "groupID": "", "imageIndexList": [int(i) for i in indexes], "deleteAll": False})
+        d = await self._post("/device/artframe/api/v1/images/delete",
+                             {"deviceID": self.cfg["device_id"], "groupID": await self.group_id(),
+                              "imageIndexList": [int(i) for i in indexes], "deleteAll": False})
+        if d.get("resultCode") != 100:
+            raise RuntimeError(f"cloud refused to delete {list(indexes)}: {d}")
+        return d
 
 
 # ---------------- Bluetooth ----------------
@@ -242,6 +272,19 @@ class FrameController:
         """Put a PIL image on the frame. Returns its album index."""
         jpeg = to_jpeg(make_portrait(img, self.cfg))
         before = await self.cloud.album()
+        # posters whose cloud delete failed earlier: try again before uploading a new one
+        stale = [i for i in self.state.get("stale", []) if i in before]
+        if stale:
+            try:
+                await self.cloud.delete(stale)
+                log.info("removed leftover posters from the cloud: %s", stale)
+                before = {k: v for k, v in before.items() if k not in stale}
+                self.state["stale"] = []
+                save_state(self.state)
+            except Exception as e:
+                log.warning("removing leftover posters failed: %s", e)
+        if len(before) >= 10:
+            raise RuntimeError(f"cloud album is full ({len(before)}/10): delete images in the SwitchBot app")
         log.info("uploading to cloud (%d KB)", len(jpeg) // 1024)
         openapi_upload(self.cfg, jpeg)
         idx = None
@@ -282,7 +325,8 @@ class FrameController:
         try:
             await self.cloud.delete([idx])
         except Exception as e:
-            log.warning("cloud delete failed: %s", e)
+            log.warning("cloud delete failed (will retry before the next upload): %s", e)
+            self.state["stale"] = sorted(set(self.state.get("stale", [])) | {idx})
         self.state["managed"] = [i for i in self.state["managed"] if i != idx]
         if self.state.get("current") == idx:
             self.state["current"] = None

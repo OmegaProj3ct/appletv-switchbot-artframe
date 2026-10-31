@@ -288,7 +288,7 @@ All settings live in `config.json` (see `config.example.json`).
 | `key_id`, `encryption_key` | Bluetooth key. Filled in by `setup_frame.py key` |
 | `token`, `secret` | Official SwitchBot API credentials |
 | `sb_email`, `sb_password` | SwitchBot account login, used for the album list |
-| `session_token`, `region` | Filled in automatically after logging in |
+| `session_token`, `region`, `group_id` | Filled in automatically after logging in. `group_id` is your SwitchBot "home", needed to delete posters from the cloud album |
 | `atv_id` | Apple TV identifier from `atvremote scan` |
 | `tmdb_key` | TMDB API key (v3) or Read Access Token (v4) |
 | `tmdb_language` | Language for TMDB searches, default `en-US`. Try `nl-NL` etc. for local titles |
@@ -322,7 +322,7 @@ this, for example Home Assistant or Homebridge with an HTTP-switch plugin.
 | `frame not found over Bluetooth` | Close the SwitchBot app on your phone. Move the Pi closer. After a Wi-Fi download the frame can be invisible over Bluetooth for a few minutes; the program retries by itself. |
 | `info` returns nothing / commands rejected | Wrong `key_id`/`encryption_key`. Run `setup_frame.py key` again. |
 | `Incorrect username or password` when fetching the key | Check that your account has a password (Apple/Google sign-in, see step 3). Log out and in again in the app. SwitchBot may block logins briefly after several failed attempts. |
-| `image count limit reached: 10` | The album is full. Delete pictures in the SwitchBot app; keep at most 9 of your own. |
+| `image count limit reached: 10` or `cloud album is full` | The album is full. Delete pictures in the SwitchBot app; keep at most 9 of your own. Versions before November 2026 left every poster in the cloud album (the delete call silently failed without a `groupID`), so if you ran one of those, clear the leftovers once. |
 | `upload did not appear in the album list` | The app API changed or the login failed. Run `setup_frame.py album` to test. |
 | Poster disappears by itself while you're still watching | The frame is in slideshow mode. See step 5. |
 | Poster stays after you stop watching | Wait about a minute. A long-lived Apple TV connection sometimes keeps reporting "playing" after a stop, so the program reconnects every `reconnect_every` seconds. |
@@ -365,7 +365,8 @@ Cloud endpoints:
 |---|---|---|
 | `POST https://api.switch-bot.com/v1.1/devices/{deviceId}/commands` (official) | token + HMAC-SHA256 signature | `{"command":"uploadImage","parameter":{"imageBase64":"data:image/jpeg;base64,…"},"commandType":"command"}` |
 | `POST https://wonderlabs.{region}.api.switchbot.net/device/artframe/api/v1/images/list` (undocumented) | header `authorization: <access_token>` from the account login | `{"deviceID":"…"}` → `data.images[].imageIndex` |
-| `POST https://wonderlabs.{region}.api.switchbot.net/device/artframe/api/v1/images/delete` (undocumented) | same | `{"deviceID":"…","groupID":"","imageIndexList":[idx],"deleteAll":false}` |
+| `POST https://wonderlabs.{region}.api.switchbot.net/homepage/v1/group/getall` (undocumented) | same | `{}` → the account's groups; the first `groupID` is used |
+| `POST https://wonderlabs.{region}.api.switchbot.net/device/artframe/api/v1/images/delete` (undocumented) | same | `{"deviceID":"…","groupID":"<groupID>","imageIndexList":[idx],"deleteAll":false}`. With an empty `groupID` the cloud answers `resultCode` ≠ 100 ("delete image failed") and nothing is deleted; `resultCode: 100` means success |
 
 Album indexes are not sequential (e.g. 4, 21, 143, 212), so the new index is found by comparing
 the list before and after an upload.
