@@ -8,6 +8,7 @@ Behaviour:
   (frame + cloud) and show a random image of your own that is already on the frame.
 - Small local HTTP API on 127.0.0.1:8765: /status, /on, /off.
 """
+import re
 import asyncio, io, json, logging, time, unicodedata
 from aiohttp import web
 from PIL import Image
@@ -39,10 +40,23 @@ TMDB_API = "https://api.themoviedb.org/3"
 TMDB_IMG = "https://image.tmdb.org/t/p/w780"
 
 
+_STUDIO_PREFIX = re.compile(r"^(?:[\w.&]+ (?:studios?|pictures|animation)'?s?|disney'?s?|pixar'?s?|lucasfilm'?s?|dreamworks'?)\s+", re.I)
+
+
+def clean_title(t):
+    """Strip studio prefixes that streaming apps put in front of titles
+    ("Marvel Studios' Captain Marvel" -> "Captain Marvel")."""
+    return _STUDIO_PREFIX.sub("", (t or "").strip(), count=1).strip() or (t or "").strip()
+
+
+def _norm(t):
+    return " ".join(re.sub(r"[^\w\s]", " ", (t or "").lower()).split())
+
+
 async def tmdb_poster(cfg, name, total_time=None, series_name=None):
     """Find a portrait poster on TMDB. Returns (bytes, description) or (None, reason)."""
     key = (cfg.get("tmdb_key") or "").strip()
-    name = series_name or name   # for an episode, search for the series name
+    name = clean_title(series_name or name)   # for an episode, search for the series name
     if not key or not name:
         return None, "no tmdb_key or title"
     import aiohttp
@@ -67,17 +81,21 @@ async def tmdb_poster(cfg, name, total_time=None, series_name=None):
         cands = [x for x in data.get("results", []) if x.get("media_type") in ("movie", "tv") and x.get("poster_path")]
         if not cands:
             return None, "no TMDB result"
-        n = name.strip().lower()
+        n = _norm(name)
 
         def score(x):
-            t = (x.get("title") or x.get("name") or "").strip().lower()
+            t = _norm(x.get("title") or x.get("name"))
+            t_orig = _norm(x.get("original_title") or x.get("original_name"))
             sc = x.get("popularity") or 0
-            if t == n:
-                sc += 1000
+            if n in (t, t_orig):
+                sc += 1000             # exact title match beats popularity
+            elif t and (f" {t} " in f" {n} " or f" {n} " in f" {t} "):
+                sc += 400              # one title contains the other ("Dune" vs "Dune: Part Two")
             if want and x["media_type"] == want:
                 sc += 500
             return sc
         best = max(cands, key=score)
+        log.debug("TMDB candidates for %r: %s", name, [(x.get("title") or x.get("name"), round(score(x))) for x in cands[:5]])
         async with s.get(TMDB_IMG + best["poster_path"]) as r:
             if r.status != 200:
                 return None, f"TMDB poster HTTP {r.status}"
