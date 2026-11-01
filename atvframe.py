@@ -40,7 +40,7 @@ TMDB_API = "https://api.themoviedb.org/3"
 TMDB_IMG = "https://image.tmdb.org/t/p/w780"
 
 
-_STUDIO_PREFIX = re.compile(r"^(?:[\w.&]+ (?:studios?|pictures|animation)'?s?|disney'?s?|pixar'?s?|lucasfilm'?s?|dreamworks'?)\s+", re.I)
+_STUDIO_PREFIX = re.compile(r"^(?:[\w.&]+ (?:studios?|pictures|animation)|disney|pixar|lucasfilm|dreamworks)['’]?s?\s+", re.I)
 
 
 def clean_title(t):
