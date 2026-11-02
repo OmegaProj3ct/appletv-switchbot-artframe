@@ -19,8 +19,9 @@ HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "config.json"
 STATE_PATH = HERE / "state.json"
 OPENAPI = "https://api.switch-bot.com"
-BLE_SCAN_TRIES = 4
-BLE_SCAN_TIMEOUT = 20
+BLE_SCAN_TRIES = 3
+BLE_SCAN_TIMEOUT = 15
+BLE_QUICK_TIMEOUT = 10   # single short scan while polling; keeps Wi-Fi/BT coexistence calm
 
 
 # ---------------- config / state ----------------
@@ -200,16 +201,17 @@ class Frame:
         self.cfg = cfg
         self.dev = None
 
-    async def _connect(self):
+    async def _connect(self, quick=False):
         from bleak import BleakScanner
         from switchbot.devices.art_frame import SwitchbotArtFrame
-        for i in range(BLE_SCAN_TRIES):
-            d = await BleakScanner.find_device_by_address(self.cfg["mac"], timeout=BLE_SCAN_TIMEOUT)
+        tries, timeout = (1, BLE_QUICK_TIMEOUT) if quick else (BLE_SCAN_TRIES, BLE_SCAN_TIMEOUT)
+        for i in range(tries):
+            d = await BleakScanner.find_device_by_address(self.cfg["mac"], timeout=timeout)
             if d:
                 self.dev = SwitchbotArtFrame(d, key_id=self.cfg["key_id"], encryption_key=self.cfg["encryption_key"])
                 return self.dev
             log.warning("frame not found over Bluetooth (try %d/%d)", i + 1, BLE_SCAN_TRIES)
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
         raise RuntimeError("frame not found over Bluetooth")
 
     async def _close(self):
@@ -220,12 +222,12 @@ class Frame:
                 pass
             self.dev = None
 
-    async def run(self, *cmds, info=True):
+    async def run(self, *cmds, info=True, quick=False):
         """Connect, send hex commands, return (info, [responses])."""
         last_err = None
-        for attempt in range(3):
+        for attempt in range(1 if quick else 3):
             try:
-                dev = await self._connect()
+                dev = await self._connect(quick)
                 try:
                     inf = await dev.get_basic_info() if info else None
                     out = []
@@ -239,11 +241,11 @@ class Frame:
                     await self._close()
             except Exception as e:  # BLE to a sleepy battery device is flaky: retry
                 last_err = e; log.warning("BLE attempt %d failed: %s", attempt + 1, e)
-                await asyncio.sleep(3)
+                await asyncio.sleep(10)
         raise RuntimeError(f"BLE failed: {last_err}")
 
-    async def info(self):
-        inf, _ = await self.run()
+    async def info(self, quick=False):
+        inf, _ = await self.run(quick=quick)
         return inf
 
     async def sync(self, idx):
@@ -301,9 +303,9 @@ class FrameController:
         await self.frame.sync(idx)
         t0 = time.time()
         while time.time() - t0 < timeout:
-            await asyncio.sleep(15)
+            await asyncio.sleep(25)
             try:
-                inf = await self.frame.info()
+                inf = await self.frame.info(quick=True)   # the frame is on Wi-Fi now; don't hammer BLE
             except Exception as e:
                 log.warning("info failed: %s", e); continue
             if idx in inf["all_images_index"]:

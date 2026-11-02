@@ -330,6 +330,7 @@ this, for example Home Assistant or Homebridge with an HTTP-switch plugin.
 | Wrong poster (e.g. a different film with the same title) | TMDB search is title-based. Episodes are matched as TV series, and anything of 70 minutes or more as a film. Try `tmdb_language`. |
 | No PIN on the TV while pairing | See step 8. |
 | Pi Zero freezes during install | Something tried to compile. Reboot and follow step 2 exactly, one command at a time. |
+| Pi becomes unreachable after a while (`dmesg` shows `brcmfmac … resumed on timeout`) | The Pi Zero 2 W's Wi-Fi and Bluetooth share one chip, and heavy BLE scanning can hang it. Newer versions scan more gently. Also enable the hardware watchdog so the Pi reboots itself: set `RuntimeWatchdogSec=15` in `/etc/systemd/system.conf` and run `sudo systemctl daemon-reexec`. |
 
 ## Known limitations
 
